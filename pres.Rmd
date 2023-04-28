@@ -1,0 +1,158 @@
+---
+title: "mini"
+author: "Marcus Campbell"
+date: "2023-04-27"
+output: pdf_document
+---
+
+
+```{r, echo=FALSE}
+teens <- read.csv('teen.csv')
+teenP <- read.csv('sns.csv')
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(tidyverse)
+library(cluster)
+library(ggpubr)
+library(factoextra)
+```
+
+
+```{r}
+# eliminate age outliers
+teens$age <- ifelse(teens$age >= 13 & teens$age < 20,
+                     teens$age, NA)
+
+# reassign missing gender values to "unknown"
+teens$female <- ifelse(teens$gender == "F" &
+                         !is.na(teens$gender), 1, 0)
+teens$no_gender <- ifelse(is.na(teens$gender), 1, 0)
+
+# create a vector with the average age for each gradyear, repeated by person
+ave_age <- ave(teens$age, teens$gradyear,
+                 FUN = function(x) mean(x, na.rm = TRUE))
+
+
+teens$age <- ifelse(is.na(teens$age), ave_age, teens$age)
+
+```
+
+```{r}
+#Training model
+interests <- teens[5:40] #Removing unwanted columns
+interests_z <- as.data.frame(lapply(interests, scale)) #Scaled data set
+
+#model for 5 clusters
+set.seed(2345)
+teen_clusters5 <- kmeans(interests_z, centers = 5)
+
+#Evaluating model performance
+#Size of the clusters
+teen_clusters5$size
+#Creating table for clusters centers
+k5 <- teen_clusters5$centers
+
+#Making a table for 5 clusters into original data set
+teens5 <- teens
+teens5$cluster <- teen_clusters5$cluster
+
+# mean age by cluster
+age5 <- aggregate(data = teens5, age ~ cluster, mean)
+# proportion of females by cluster
+female5 <- aggregate(data = teens5, female ~ cluster, mean)
+# mean number of friends by cluster
+friends5 <- aggregate(data = teens5, friends ~ cluster, mean)
+```
+
+```{r}
+#Computing Elbow method
+set.seed(123)
+# function to compute total within-cluster sum of square 
+wss <- function(k) {
+  kmeans(interests_z, k, nstart = 10 )$tot.withinss
+}
+
+# Compute and plot wss for k = 1 to k = 15
+k.values <- 4:20
+
+# extract wss for 2-15 clusters
+wss_values <- map_dbl(k.values, wss)
+
+```
+
+```{r}
+#Plot for Elbow method
+plot(k.values, wss_values,
+       type="b", pch = 19, frame = FALSE, 
+       xlab="Number of clusters K",
+       ylab="Total within-clusters sum of squares")
+```
+
+```{r}
+# function to compute average silhouette for k clusters
+avg_sil <- function(k) {
+  km.res <- kmeans(interests_z, centers = k, nstart = 25)
+  ss <- silhouette(km.res$cluster, dist(interests_z))
+  mean(ss[, 3])
+}
+
+# Compute and plot wss for k = 2 to k = 15
+k.values <- 2:15
+
+# extract avg silhouette for 2-15 clusters
+avg_sil_values <- map_dbl(k.values, avg_sil)
+```
+
+```{r}
+#Plot for Silhouette method
+plot(k.values, avg_sil_values,
+       type = "b", pch = 19, frame = FALSE, 
+       xlab = "Number of clusters K",
+       ylab = "Average Silhouettes")
+
+```
+
+```{r}
+#Optimal run where clusters = 12
+#Reload and rescale data set
+interests <- teens[5:40]
+interests_z <- as.data.frame(lapply(interests, scale)) #Training set
+
+#Running k-means with 12 clusters
+set.seed(2345)
+teen_clusters12 <- kmeans(interests_z, centers = 12)
+
+#Evaluating model performance
+#Size of the clusters
+teen_clusters12$size
+#Creating table for clusters centers
+k12 <- teen_clusters12$centers
+
+#Making a table for 5 clusters into original data set
+teens12 <- teens
+teens12$cluster <- teen_clusters12$cluster
+# mean age by cluster
+age12 <- aggregate(data = teens12, age ~ cluster, mean)
+# proportion of females by cluster
+female12 <- aggregate(data = teens12, female ~ cluster, mean)
+# mean number of friends by cluster
+friends12 <- aggregate(data = teens12, friends ~ cluster, mean)
+```
+
+```{r}
+#Attempting to plot clusters of optimal run
+fviz_cluster(teen_clusters12, data = interests_z, 
+             geom = "point",
+             ellipse.type = "convex", 
+             ggtheme = theme_bw()
+             )
+
+```
+
+
+
+
+
+
+
